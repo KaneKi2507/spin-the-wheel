@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Hub: Spin, Flip & Guess</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #e74c3c;
+            --light: #ecf0f1;
+            --secondary: #34495e;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--primary);
+            color: white;
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* NAVIGATION SIDEBAR */
+        .sidebar {
+            width: 250px;
+            background-color: var(--secondary);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: var(--light);
+            padding: 15px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 1.1rem;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background-color: var(--accent);
+            color: white;
+            font-weight: bold;
+        }
+
+        /* MAIN CONTENT AREA */
+        .main-content {
+            flex-grow: 1;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .game-section {
+            display: none; /* Hidden by default */
+            width: 100%;
+            max-width: 800px;
+            animation: fadeIn 0.5s;
+        }
+
+        .game-section.active {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 { margin-bottom: 30px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+
+        /* --- SPIN WHEEL STYLES --- */
+        .wheel-container { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; }
+        .wheel-inputs { width: 250px; }
+        textarea { width: 100%; height: 120px; padding: 10px; background: rgba(0,0,0,0.2); color: white; border: 1px solid #7f8c8d; border-radius: 5px; }
+        .wheel-wrapper { position: relative; width: 400px; height: 400px; }
+        #wheelCanvas { width: 100%; height: 100%; border-radius: 50%; border: 8px solid white; transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99); }
+        .pointer { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); border-left: 20px solid transparent; border-right: 20px solid transparent; border-top: 40px solid var(--accent); z-index: 10; }
+        #wheelWinner { font-size: 2rem; color: #f1c40f; margin-top: 20px; font-weight: bold; min-height: 40px;}
+
+        /* --- COIN TOSS STYLES --- */
+        .coin-wrapper { perspective: 1000px; margin: 50px; }
+        .coin { width: 200px; height: 200px; position: relative; transform-style: preserve-3d; transition: transform 3s ease-out; }
+        .coin div { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-size: 3rem; font-weight: bold; border: 10px solid #f1c40f; }
+        .heads { background-color: #f39c12; color: white; transform: rotateY(0deg); }
+        .tails { background-color: #bdc3c7; color: #2c3e50; transform: rotateY(180deg); }
+        
+        /* --- CARD GAME STYLES --- */
+        .card-table { display: flex; gap: 20px; perspective: 1000px; margin-top: 30px; }
+        .card { width: 100px; height: 150px; position: relative; transform-style: preserve-3d; transition: transform 0.6s; cursor: pointer; }
+        .card.flipped { transform: rotateY(180deg); }
+        .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 2rem; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .card-back { background: repeating-linear-gradient(45deg, #c0392b, #c0392b 10px, #e74c3c 10px, #e74c3c 20px); border: 2px solid white; }
+        .card-front { background: white; color: black; transform: rotateY(180deg); }
+        .red-suit { color: red; }
+        
+        /* --- COUNTRY GAME STYLES --- */
+        .map-controls { background: rgba(0,0,0,0.2); padding: 20px; border-radius: 10px; width: 100%; max-width: 500px; }
+        select, .action-btn { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: none; font-size: 1rem; cursor: pointer; }
+        .action-btn { background-color: var(--accent); color: white; font-weight: bold; }
+        .action-btn:hover { opacity: 0.9; }
+        .country-result { margin-top: 30px; text-align: center; }
+        .flag-display { font-size: 8rem; margin: 20px 0; }
+        .country-name { font-size: 2.5rem; color: #f1c40f; display: none; } /* Hidden initially for guessing */
+        .reveal-btn { background-color: #3498db; }
+
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <h2 style="color: var(--accent); padding: 0 15px;">Game Hub</h2>
+        <button class="nav-btn active" onclick="showSection('wheel')">🎡 Spin Wheel</button>
+        <button class="nav-btn" onclick="showSection('coin')">🪙 Coin Toss</button>
+        <button class="nav-btn" onclick="showSection('cards')">🃏 Find the Ace</button>
+        <button class="nav-btn" onclick="showSection('country')">🌍 Geo Guess</button>
+    </nav>
+
+    <main class="main-content">
+
+        <div id="wheel" class="game-section active">
+            <h1>Custom Spin Wheel</h1>
+            <div class="wheel-container">
+                <div class="wheel-inputs">
+                    <textarea id="namesInput" placeholder="Enter names...">Alice&#10;Bob&#10;Charlie&#10;David</textarea>
+                    <button class="action-btn" onclick="drawWheel()" style="background:#3498db; margin-top:10px;">Update Wheel</button>
+                    <button class="action-btn" onclick="spinWheel()" style="margin-top:10px;">SPIN!</button>
+                    <div id="wheelWinner"></div>
+                </div>
+                <div class="wheel-wrapper">
+                    <div class="pointer"></div>
+                    <canvas id="wheelCanvas" width="500" height="500"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="coin" class="game-section">
+            <h1>Coin Toss</h1>
+            <div class="coin-wrapper">
+                <div id="coinObj" class="coin">
+                    <div class="heads">H</div>
+                    <div class="tails">T</div>
+                </div>
+            </div>
+            <button class="action-btn" onclick="flipCoin()" style="width: 200px;">FLIP COIN</button>
+            <h2 id="coinResult" style="margin-top: 30px; color: #f1c40f;"></h2>
+        </div>
+
+        <div id="cards" class="game-section">
+            <h1>Find the Ace of Spades ♠️</h1>
+            <p id="cardInstruction">I will shuffle the Aces. Click the Ace of Spades to win!</p>
+            <button class="action-btn" onclick="startCardGame()" style="width: 200px; background:#2ecc71;">Start / Shuffle</button>
+            <div class="card-table" id="cardTable">
+                </div>
+            <h2 id="cardResult" style="margin-top: 20px; min-height: 40px;"></h2>
+        </div>
+
+        <div id="country" class="game-section">
+            <h1>Random Country Generator</h1>
+            <div class="map-controls">
+                <label>Select Continent:</label>
+                <select id="continentSelect">
+                    <option value="all">🌍 Global (All Continents)</option>
+                    <option value="Africa">Africa</option>
+                    <option value="Asia">Asia</option>
+                    <option value="Europe">Europe</option>
+                    <option value="North America">North America</option>
+                    <option value="South America">South America</option>
+                    <option value="Oceania">Oceania</option>
+                </select>
+                <button class="action-btn" onclick="generateCountry()">Generate Country</button>
+            </div>
+
+            <div id="countryDisplay" class="country-result" style="display:none;">
+                <p>Where is this country?</p>
+                <div id="flagEmoji" class="flag-display"></div>
+                
+                <div id="countryAnswer" style="display:none;">
+                    <div id="countryNameText" class="country-name"></div>
+                    <a id="mapLink" href="#" target="_blank" style="color: #3498db; text-decoration: none;">View on Google Maps ↗</a>
+                </div>
+
+                <button id="revealBtn" class="action-btn reveal-btn" onclick="revealCountry()" style="margin-top: 20px;">Show Answer</button>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- NAVIGATION LOGIC ---
+        function showSection(id) {
+            // Hide all sections
+            document.querySelectorAll('.game-section').forEach(sec => {
+                sec.classList.remove('active');
+            });
+            // Deactivate all buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected
+            document.getElementById(id).classList.add('active');
+            // Highlight button (simple logic finding button by onclick text is messy, relying on order)
+            // Ideally we'd add IDs to buttons, but let's keep it simple:
+            event.target.classList.add('active');
+        }
+
+        // --- 1. SPIN WHEEL LOGIC ---
+        const wheelCanvas = document.getElementById('wheelCanvas');
+        const wheelCtx = wheelCanvas.getContext('2d');
+        let wheelNames = [];
+        let wheelRotation = 0;
+        const wheelColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#e74c3c', '#2ecc71'];
+
+        function drawWheel() {
+            const text = document.getElementById('namesInput').value;
+            wheelNames = text.split('\n').filter(n => n.trim() !== '');
+            if(wheelNames.length === 0) return;
+
+            const sliceAngle = (2 * Math.PI) / wheelNames.length;
+            const cx = wheelCanvas.width / 2;
+            const cy = wheelCanvas.height / 2;
+
+            wheelCtx.clearRect(0,0,500,500);
+
+            wheelNames.forEach((name, i) => {
+                const start = i * sliceAngle;
+                const end = (i + 1) * sliceAngle;
+
+                wheelCtx.beginPath();
+                wheelCtx.moveTo(cx, cy);
+                wheelCtx.arc(cx, cy, 250, start, end);
+                wheelCtx.fillStyle = wheelColors[i % wheelColors.length];
+                wheelCtx.fill();
+                wheelCtx.stroke();
+
+                wheelCtx.save();
+                wheelCtx.translate(cx, cy);
+                wheelCtx.rotate(start + sliceAngle/2);
+                wheelCtx.textAlign = "right";
+                wheelCtx.fillStyle = "white";
+                wheelCtx.font = "bold 24px Arial";
+                wheelCtx.fillText(name, 230, 10);
+                wheelCtx.restore();
+            });
+        }
+
+        function spinWheel() {
+            if(wheelNames.length === 0) return alert("Add names first!");
+            
+            // 1. Clear winner text IMMEDIATELY
+            document.getElementById('wheelWinner').textContent = ""; 
+            document.getElementById('wheelWinner').style.opacity = "0";
+
+            // 2. Random spin
+            const spinDeg = Math.floor(Math.random() * 3000) + 3000; // At least 3000deg
+            wheelRotation += spinDeg;
+            wheelCanvas.style.transform = `rotate(${wheelRotation}deg)`;
+
+            // 3. Calculate Winner AFTER animation (4 seconds)
+            setTimeout(() => {
+                const actualDeg = wheelRotation % 360;
+                // Adjust for pointer at top (270deg relative to 0 at 3 o'clock)
+                const pointerAngle = (360 - actualDeg + 270) % 360;
+                const sliceDeg = 360 / wheelNames.length;
+                const index = Math.floor(pointerAngle / sliceDeg);
+                
+                const winner = wheelNames[index % wheelNames.length];
+                const winnerEl = document.getElementById('wheelWinner');
+                winnerEl.textContent = `🎉 ${winner} 🎉`;
+                winnerEl.style.opacity = "1";
+                winnerEl.style.transition = "opacity 0.5s";
+            }, 4000);
+        }
+        
+        // Initialize Wheel
+        drawWheel();
+
+
+        // --- 2. COIN TOSS LOGIC ---
+        function flipCoin() {
+            const coin = document.getElementById('coinObj');
+            const resultText = document.getElementById('coinResult');
+            resultText.textContent = ""; // Clear previous
+
+            const isHeads = Math.random() < 0.5;
+            // Ensure it rotates enough to look real. 
+            // If currently 0, spin to 1800 (Heads->Heads) or 1980 (Heads->Tails)
+            // We use a simpler logic: just add lots of rotations + final state
+            
+            const currentRot = coin.style.transform.match(/rotateY\((\d+)deg\)/);
+            let baseRot = currentRot ? parseInt(currentRot[1]) : 0;
+            
+            // Add 5 full spins (1800) + outcome
+            // If we want heads: outcome is multiple of 360. If tails: multiple of 360 + 180.
+            let outcome = isHeads ? 0 : 180;
+            let nextRot = baseRot + 1800 + (outcome - (baseRot % 360));
+            
+            // Fix edge case where it spins backward to reach target
+            if (nextRot <= baseRot) nextRot += 360;
+
+            coin.style.transform = `rotateY(${nextRot}deg)`;
+
+            setTimeout(() => {
+                resultText.textContent = isHeads ? "It's HEADS!" : "It's TAILS!";
+            }, 3000);
+        }
+
+
+        // --- 3. CARD GAME LOGIC ---
+        const suits = ['♠️', '♥️', '♦️', '♣️'];
+        let cardsDealt = [];
+        let canClickCard = false;
+
+        function startCardGame() {
+            const table = document.getElementById('cardTable');
+            const result = document.getElementById('cardResult');
+            result.textContent = "";
+            table.innerHTML = "";
+            canClickCard = false;
+
+            // 1. Create 4 Aces
+            let cards = [
+                { suit: '♠️', color: 'black', id: 'ace-spade' },
+                { suit: '♥️', color: 'red-suit', id: 'ace-heart' },
+                { suit: '♦️', color: 'red-suit', id: 'ace-diamond' },
+                { suit: '♣️', color: 'black', id: 'ace-club' }
+            ];
+
+            // 2. Shuffle Array
+            cards.sort(() => Math.random() - 0.5);
+            cardsDealt = cards;
+
+            // 3. Render Face Down
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card';
+                cardEl.innerHTML = `
+                    <div class="card-face card-front ${card.color}">A ${card.suit}</div>
+                    <div class="card-face card-back"></div>
+                `;
+                cardEl.onclick = () => handleCardClick(card, cardEl);
+                
+                // Start visible for 1 second so user knows which is which? 
+                // No, prompt says "4 ace cards are face up initially, then turned face down"
+                
+                // Let's render them Face UP first
+                cardEl.classList.add('flipped'); 
+                table.appendChild(cardEl);
+            });
+
+            // 4. Sequence: Show -> Hide -> Shuffle (Visual only?)
+            // Simple version: Show for 2 seconds, then flip back.
+            document.getElementById('cardInstruction').textContent = "Memorize the Ace of Spades...";
+            
+            setTimeout(() => {
+                // Flip all face down
+                document.querySelectorAll('.card').forEach(c => c.classList.remove('flipped'));
+                document.getElementById('cardInstruction').textContent = "Shuffling...";
+                
+                // Shuffle animation simulation (simple re-ordering in DOM)
+                setTimeout(() => {
+                    // Re-append in random order to visually shuffle
+                    cards.sort(() => Math.random() - 0.5);
+                    table.innerHTML = "";
+                    cards.forEach(c => {
+                         // Re-create elements to reset state
+                         // (For simplicity in this code block, we just re-render hidden)
+                         const el = document.createElement('div');
+                         el.className = 'card';
+                         el.innerHTML = `<div class="card-face card-front ${c.color}">A ${c.suit}</div><div class="card-face card-back"></div>`;
+                         el.onclick = () => handleCardClick(c, el);
+                         table.appendChild(el);
+                    });
+                    
+                    canClickCard = true;
+                    document.getElementById('cardInstruction').textContent = "Where is the Ace of Spades (♠️)? Click a card!";
+                }, 1000);
+
+            }, 2000);
+        }
+
+        function handleCardClick(cardData, element) {
+            if(!canClickCard) return;
+            element.classList.add('flipped');
+            
+            const result = document.getElementById('cardResult');
+            if (cardData.suit === '♠️') {
+                result.textContent = "CORRECT! You found the Spades! 🎉";
+                result.style.color = "#2ecc71";
+                canClickCard = false; // Game over
+            } else {
+                result.textContent = "Wrong! Try again.";
+                result.style.color = "#e74c3c";
+            }
+        }
+
+
+        // --- 4. COUNTRY GENERATOR LOGIC ---
+        // Mini Database of Countries
+        const countriesDB = [
+            { name: "Japan", continent: "Asia", flag: "🇯🇵" },
+            { name: "India", continent: "Asia", flag: "🇮🇳" },
+            { name: "China", continent: "Asia", flag: "🇨🇳" },
+            { name: "Thailand", continent: "Asia", flag: "🇹🇭" },
+            { name: "France", continent: "Europe", flag: "🇫🇷" },
+            { name: "Germany", continent: "Europe", flag: "🇩🇪" },
+            { name: "Italy", continent: "Europe", flag: "🇮🇹" },
+            { name: "United Kingdom", continent: "Europe", flag: "🇬🇧" },
+            { name: "Nigeria", continent: "Africa", flag: "🇳🇬" },
+            { name: "Egypt", continent: "Africa", flag: "🇪🇬" },
+            { name: "South Africa", continent: "Africa", flag: "🇿🇦" },
+            { name: "Kenya", continent: "Africa", flag: "🇰🇪" },
+            { name: "USA", continent: "North America", flag: "🇺🇸" },
+            { name: "Canada", continent: "North America", flag: "🇨🇦" },
+            { name: "Mexico", continent: "North America", flag: "🇲🇽" },
+            { name: "Brazil", continent: "South America", flag: "🇧🇷" },
+            { name: "Argentina", continent: "South America", flag: "🇦🇷" },
+            { name: "Australia", continent: "Oceania", flag: "🇦🇺" },
+            { name: "New Zealand", continent: "Oceania", flag: "🇳🇿" }
+        ];
+
+        let currentCountry = null;
+
+        function generateCountry() {
+            const continent = document.getElementById('continentSelect').value;
+            let pool = countriesDB;
+            
+            if (continent !== 'all') {
+                pool = countriesDB.filter(c => c.continent === continent);
+            }
+
+            if (pool.length === 0) return alert("No countries in database for this region (add more in code!)");
+
+            // Pick Random
+            const randIndex = Math.floor(Math.random() * pool.length);
+            currentCountry = pool[randIndex];
+
+            // Reset UI
+            document.getElementById('countryDisplay').style.display = "block";
+            document.getElementById('flagEmoji').textContent = currentCountry.flag;
+            document.getElementById('countryAnswer').style.display = "none";
+            document.getElementById('revealBtn').style.display = "inline-block";
+        }
+
+        function revealCountry() {
+            if(!currentCountry) return;
+            document.getElementById('countryNameText').textContent = currentCountry.name;
+            document.getElementById('mapLink').href = `https://www.google.com/maps/place/${currentCountry.name}`;
+            
+            document.getElementById('countryAnswer').style.display = "block";
+            document.getElementById('revealBtn').style.display = "none";
+        }
+
+    </script>
+</body>
+</html>
